@@ -1,3 +1,7 @@
+import org.lwjgl.glfw.GLFW.{glfwPollEvents, glfwSwapBuffers, glfwWindowShouldClose}
+import org.lwjgl.opengl.GL
+import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor}
+
 import java.util.concurrent.{RecursiveAction, RecursiveTask}
 
 abstract class JTree extends RecursiveTask[Double] {
@@ -88,12 +92,16 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
     }
   }
 
-  def compute(): Array[Array[Cell]] = {
-    //loop until converged
+  def compute(window:Option[Long]): Array[Array[Cell]] = {
+    GL.createCapabilities()
+    glClearColor(1,1,1,0)
+
     var steps = 0
     var difference:Double = 100
-    while(difference > maxDiff && steps < maxSteps) {
-      //graphics here
+
+    while(!glfwWindowShouldClose(window.get) && difference > maxDiff && steps < maxSteps) {
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
       difference = root.computeT()
       old = out.clone()
       root.setArr(old)
@@ -101,16 +109,21 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
 
       steps += 1
       println(s"Step: $steps")
+
+      glfwSwapBuffers(window.get)
+      glfwPollEvents()
     }
+
     out
     //this is where the graphics stuff happens
   }
 
-  def updateHeating(t:Double,s:Double): Unit = {
+
+  private def updateHeating(t:Double,s:Double): Unit = {
     heat1 = t
     heat2 = s
   }
-  def updateHeatingWaveSynced(amplitude:Double): Unit = { //might look cool, we'll see
+  private def updateHeatingWaveSynced(amplitude:Double): Unit = { //might look cool, we'll see
     val heat = math.sin(2 * math.Pi * 3 * (System.currentTimeMillis()/1000.0))
   }
   //i did something better, should be unused but i like to look at this monstrosity
