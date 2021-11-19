@@ -1,6 +1,6 @@
 import org.lwjgl.glfw.GLFW.{glfwPollEvents, glfwSwapBuffers, glfwWindowShouldClose}
 import org.lwjgl.opengl.GL
-import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor}
+import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_QUADS, glBegin, glClear, glClearColor, glColor3f, glEnd, glVertex3f, glVertex3i}
 
 import java.util.concurrent.{RecursiveAction, RecursiveTask}
 
@@ -71,7 +71,9 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
   var heat2 = s
   val maxDiff = 0.01
   val minSize = 30
-  val roomTempt = 20
+  val roomTemp = Alloy.roomTemp
+  private val graphicMaxHeat = 200
+  private val cellSize = 10
   //var old = Array.fill[Cell](arr.length,arr(0).length)(alloy.randomCell(20)) //room temp 20
   var out:Array[Array[Cell]] = Array.ofDim[Cell](old.length,old.head.length)
   val root:JTree = build(old,Coord(0,0),Coord(old.length,old(0).length))
@@ -98,6 +100,7 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
 
     var steps = 0
     var difference:Double = 100
+    var color:(Float,Float,Float) = null
 
     while(!glfwWindowShouldClose(window.get) && difference > maxDiff && steps < maxSteps) {
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -106,9 +109,21 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
       old = out.clone()
       root.setArr(old)
       //updateHeatingWaveSynced(20)  //will be tested when graphics
-
       steps += 1
       println(s"Step: $steps")
+
+      glBegin(GL_QUADS)
+      glColor3f(0,0,0)
+      rect(-100000,-100000,200000,200000) //large rectangle to show edge borders
+
+      for(i <- old.indices) {
+        for(j <- old(i).indices) {
+          color = interpolateHeatColor(old(i)(j).temp)
+          rect(i*cellSize +1,j*cellSize+1, cellSize - 2,cellSize - 2)
+        }
+      }
+      glEnd()
+
 
       glfwSwapBuffers(window.get)
       glfwPollEvents()
@@ -116,6 +131,13 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
 
     out
     //this is where the graphics stuff happens
+  }
+
+  private def rect(x:Int,y:Int,width:Int,height:Int): Unit = {
+    glVertex3i(x,y,0)
+    glVertex3i(x+width,y,0)
+    glVertex3i(x+width,y+height,0)
+    glVertex3i(x,y+height,0)
   }
 
 
@@ -130,6 +152,15 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
   def getDifference(): Double = {
     old.indices.map(_.toDouble).reduce[Double]((a,b) => a + old(b.toInt).indices.map(_.toDouble).reduce[Double]((i,j) => i + math.abs(old(b.toInt)(j.toInt).temp - out(b.toInt)(j.toInt).temp))) //why do i do this to myself
   }
+
+  def interpolateHeatColor(heat:Double): (Float,Float,Float) = {
+    val t = ((heat - roomTemp) / (graphicMaxHeat - roomTemp)).toFloat
+    val r = t
+    val g = (1 - (2*math.abs(.5 - t))).toFloat
+    val b = 1 - t
+    (r,g,b)
+  }
+
 }
 
 

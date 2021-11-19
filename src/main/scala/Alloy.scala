@@ -2,7 +2,7 @@ import scala.util.Random
 
 class Alloy(val height:Int,val c1:Double,val cm1:Double,val c2:Double,val cm2:Double, val c3:Double,val cm3:Double) {
   val width = 2*height
-  val arr = Array.fill[Cell](width,height)(randomCell(20))
+  val arr = Array.fill[Cell](width,height)(randomCell(Alloy.roomTemp))
   def randomCell(startTemp:Double): Cell = {
     val maxVar = Random.between(0,25)
     val props = Array(c1,c2,c3)
@@ -18,6 +18,10 @@ class Alloy(val height:Int,val c1:Double,val cm1:Double,val c2:Double,val cm2:Do
     }
     Cell(props(0),cm1,props(1),cm2,props(2),cm3,startTemp)
   }
+}
+
+object Alloy {
+  val roomTemp = 20
 }
 
 
