@@ -13,7 +13,7 @@ class Alloy(val height:Int,val c1:Double,val cm1:Double,val c2:Double,val cm2:Do
       props(choice) += (.01 * neg)
 
       for(j <- props.indices) {
-        if(j != i)
+        if(j != choice)
           props(j) -= (.005 * neg)
       }
     }
