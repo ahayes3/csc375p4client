@@ -10,10 +10,11 @@ class Alloy(val height:Int,val c1:Double,val cm1:Double,val c2:Double,val cm2:Do
       val choice = Random.between(0,3)
       val neg = if(Random.nextBoolean()) 1 else -1
 
-      props(i) += (.01 * neg)
+      props(choice) += (.01 * neg)
 
       for(j <- props.indices) {
-        props(j) -= (.005 * neg)
+        if(j != i)
+          props(j) -= (.005 * neg)
       }
     }
     Cell(props(0),cm1,props(1),cm2,props(2),cm3,startTemp)

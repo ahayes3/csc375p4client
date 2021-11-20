@@ -18,8 +18,9 @@ object Main {
   val c1 = .75
   val c2 = 1.0
   val c3 = 1.25
-  val alloy = new Alloy(10,1/3,c1,1/3,c2,1/3,c3)
-  val jacobi = new Jacobi(alloy.arr,t,s,alloy,100)
+  val maxSteps = 2000
+  val alloy = new Alloy(10,1.0/3,c1,1.0/3,c2,1.0/3,c3)
+  val jacobi = new Jacobi(alloy.arr,t,s,alloy,maxSteps)
   private val translation = 20
 
   def loop():Unit = {
@@ -52,7 +53,7 @@ object Main {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE)
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE)
 
-    window = Option(glfwCreateWindow(500,500,"HELLO WORLD ! ! !",NULL,NULL)) //use the java NULL
+    window = Option(glfwCreateWindow(1920,1080,"Heatmap Propagation",NULL,NULL)) //use the java NULL
     if(window.isEmpty)
       throw new RuntimeException("Failed to create the GLFW window")
 

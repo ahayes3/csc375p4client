@@ -1,6 +1,6 @@
 import org.lwjgl.glfw.GLFW.{glfwPollEvents, glfwSwapBuffers, glfwWindowShouldClose}
 import org.lwjgl.opengl.GL
-import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_QUADS, glBegin, glClear, glClearColor, glColor3f, glEnd, glVertex3f, glVertex3i}
+import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_MODELVIEW, GL_PROJECTION, GL_QUADS, glBegin, glClear, glClearColor, glColor3f, glEnd, glLoadIdentity, glMatrixMode, glOrtho, glVertex3f, glVertex3i, glViewport}
 
 import java.util.concurrent.{RecursiveAction, RecursiveTask}
 
@@ -12,11 +12,18 @@ abstract class JTree extends RecursiveTask[Double] {
 }
 
 class Interior(q1:JTree,q2:JTree,q3:JTree,q4:JTree) extends JTree {
+  val quads = Seq(q1,q2,q3,q4)
   def compute(): Double = {
-    q1.invoke() +
-    q2.invoke() +
-    q3.invoke() +
-    q4.computeT()
+    q1.fork()
+    q2.fork()
+    q3.fork()
+
+    val a = q4.computeT()
+    val b = q1.join() + q2.join() + q3.join()
+    q1.reinitialize()
+    q2.reinitialize()
+    q3.reinitialize()
+    a+b
   }
 
   override def setArr(a:Array[Array[Cell]]): Unit = {
@@ -34,9 +41,12 @@ class Leaf(var arr:Array[Array[Cell]],var out:Array[Array[Cell]],val tl:Coord,va
       for(j <- tl.y until br.y) {
         val oldCell = arr(i)(j)
         val neighbors = getNeighbors(i,j,arr)
-        val partTemps = tuple3toSeq(neighbors.map(_.tempProps()).reduce((a,b) => (a._1 + b._1, a._2 + b._2, a._3 + b._3))).map(p => p/neighbors.length)
-        val newTemp = (partTemps(0) * oldCell.cm1) + (partTemps(1) * oldCell.cm2) + (partTemps(2) * oldCell.cm3)
-        diff += newTemp - oldCell.temp
+        val thermConsts = (neighbors(0).cm1,neighbors(0).cm2,neighbors(0).cm3)
+        val partTemps = neighbors.map(p => p.tempProps()).reduce((a,b) => (a._1 + b._1,a._2 + b._2,a._3+b._3))
+        val newTemp:Double = ((partTemps(0) * oldCell.cm1)/neighbors.length) + ((partTemps(1) * oldCell.cm2)/neighbors.length) + ((partTemps(2) * oldCell.cm3)/neighbors.length)
+        diff += math.abs(newTemp - oldCell.temp)
+        if(newTemp > 200)
+          println("HElLO")
         out(i)(j) = oldCell.copy(temp = newTemp)
         //code here returns total difference
       }
@@ -53,13 +63,13 @@ class Leaf(var arr:Array[Array[Cell]],var out:Array[Array[Cell]],val tl:Coord,va
     if(x > 0)
       neighbors :+= arr(x-1)(y)
 
-    if(x < arr.length)
+    if(x < arr.length-1)
       neighbors :+= arr(x+1)(y)
 
     if(y > 0)
       neighbors :+= arr(x)(y-1)
 
-    if(y < arr(x).length)
+    if(y < arr(x).length-1)
       neighbors :+= arr(x)(y+1)
 
     neighbors
@@ -69,8 +79,8 @@ class Leaf(var arr:Array[Array[Cell]],var out:Array[Array[Cell]],val tl:Coord,va
 class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, val maxSteps:Int) {
   var heat1 = t
   var heat2 = s
-  val maxDiff = 0.01
-  val minSize = 30
+  val maxDiff = 30
+  val minSize = 35
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = 200
   private val cellSize = 10
@@ -97,6 +107,11 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
   def compute(window:Option[Long]): Array[Array[Cell]] = {
     GL.createCapabilities()
     glClearColor(1,1,1,0)
+    glViewport(0,0,1920,1080)
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    glOrtho(0,1920,1080,0,1,-1)
+    glMatrixMode(GL_MODELVIEW)
 
     var steps = 0
     var difference:Double = 100
@@ -105,21 +120,27 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
     while(!glfwWindowShouldClose(window.get) && difference > maxDiff && steps < maxSteps) {
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
+      applyHeat()
+
       difference = root.computeT()
-      old = out.clone()
+      old = out.map(p => p.clone())
+
+      println(s"TEMP: ${old(5)(5).temp}")
       root.setArr(old)
       //updateHeatingWaveSynced(20)  //will be tested when graphics
       steps += 1
       println(s"Step: $steps")
 
       glBegin(GL_QUADS)
-      glColor3f(0,0,0)
-      rect(-100000,-100000,200000,200000) //large rectangle to show edge borders
+      glColor3f(0,1,0)
+      //rect(-100000,-100000,200000,200000) //large rectangle to show edge borders
+      rect(0,0,100,100)
 
       for(i <- old.indices) {
         for(j <- old(i).indices) {
           color = interpolateHeatColor(old(i)(j).temp)
-          rect(i*cellSize +1,j*cellSize+1, cellSize - 2,cellSize - 2)
+          glColor3f(color._1,color._2,color._3)
+          rect(i*cellSize,j*cellSize, cellSize,cellSize)
         }
       }
       glEnd()
@@ -127,6 +148,8 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
 
       glfwSwapBuffers(window.get)
       glfwPollEvents()
+      println(s"Difference: $difference    Steps: $steps")
+      //Thread.sleep(25)
     }
 
     out
@@ -138,6 +161,11 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
     glVertex3i(x+width,y,0)
     glVertex3i(x+width,y+height,0)
     glVertex3i(x,y+height,0)
+  }
+
+  private def applyHeat(): Unit = {
+    old(0)(0).temp = heat1
+    old.last.last.temp = heat2
   }
 
 
@@ -160,7 +188,6 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
     val b = 1 - t
     (r,g,b)
   }
-
 }
 
 
