@@ -41,14 +41,16 @@ class Leaf(var arr:Array[Array[Cell]],var out:Array[Array[Cell]],val tl:Coord,va
       for(j <- tl.y until br.y) {
         val oldCell = arr(i)(j)
         val neighbors = getNeighbors(i,j,arr)
+
         val thermConsts = (neighbors(0).cm1,neighbors(0).cm2,neighbors(0).cm3)
-        val partTemps = neighbors.map(p => p.tempProps()).reduce((a,b) => (a._1 + b._1,a._2 + b._2,a._3+b._3))
-        val newTemp:Double = ((partTemps(0) * oldCell.cm1)/neighbors.length) + ((partTemps(1) * oldCell.cm2)/neighbors.length) + ((partTemps(2) * oldCell.cm3)/neighbors.length)
+        val partTemps = neighbors.map(p => p.tempProps()).reduce((a,b) => ((a._1 + b._1),(a._2 + b._2),(a._3+b._3)))
+        val adjusted:(Double,Double,Double) = ((partTemps._1 * oldCell.cm1), ((partTemps._2 * oldCell.cm2)), ((partTemps._3 * oldCell.cm3)))
+        val newTemp:Double = (adjusted._1 + adjusted._2 + adjusted._3)/neighbors.length
+
+
         diff += math.abs(newTemp - oldCell.temp)
-        if(newTemp > 200)
-          println("HElLO")
+
         out(i)(j) = oldCell.copy(temp = newTemp)
-        //code here returns total difference
       }
     }
     diff
@@ -76,15 +78,14 @@ class Leaf(var arr:Array[Array[Cell]],var out:Array[Array[Cell]],val tl:Coord,va
   }
 }
 
-class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, val maxSteps:Int) {
+class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, val maxSteps:Int,val cellSize:Int) {
   var heat1 = t
   var heat2 = s
-  val maxDiff = 30
+  val maxDiff = 50
   val minSize = 35
   val roomTemp = Alloy.roomTemp
-  private val graphicMaxHeat = 200
-  private val cellSize = 10
-  //var old = Array.fill[Cell](arr.length,arr(0).length)(alloy.randomCell(20)) //room temp 20
+  private val graphicMaxHeat = math.max(heat1,heat2)
+
   var out:Array[Array[Cell]] = Array.ofDim[Cell](old.length,old.head.length)
   val root:JTree = build(old,Coord(0,0),Coord(old.length,old(0).length))
 
@@ -125,16 +126,13 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
       difference = root.computeT()
       old = out.map(p => p.clone())
 
-      println(s"TEMP: ${old(5)(5).temp}")
       root.setArr(old)
       //updateHeatingWaveSynced(20)  //will be tested when graphics
       steps += 1
-      println(s"Step: $steps")
+      if(steps%100 == 0)
+        println(s"Step: $steps")
 
       glBegin(GL_QUADS)
-      glColor3f(0,1,0)
-      //rect(-100000,-100000,200000,200000) //large rectangle to show edge borders
-      rect(0,0,100,100)
 
       for(i <- old.indices) {
         for(j <- old(i).indices) {
@@ -149,11 +147,8 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
       glfwSwapBuffers(window.get)
       glfwPollEvents()
       println(s"Difference: $difference    Steps: $steps")
-      //Thread.sleep(25)
     }
-
     out
-    //this is where the graphics stuff happens
   }
 
   private def rect(x:Int,y:Int,width:Int,height:Int): Unit = {
@@ -175,10 +170,6 @@ class Jacobi(var old:Array[Array[Cell]],val t:Double,val s:Double,alloy:Alloy, v
   }
   private def updateHeatingWaveSynced(amplitude:Double): Unit = { //might look cool, we'll see
     val heat = math.sin(2 * math.Pi * 3 * (System.currentTimeMillis()/1000.0))
-  }
-  //i did something better, should be unused but i like to look at this monstrosity
-  def getDifference(): Double = {
-    old.indices.map(_.toDouble).reduce[Double]((a,b) => a + old(b.toInt).indices.map(_.toDouble).reduce[Double]((i,j) => i + math.abs(old(b.toInt)(j.toInt).temp - out(b.toInt)(j.toInt).temp))) //why do i do this to myself
   }
 
   def interpolateHeatColor(heat:Double): (Float,Float,Float) = {

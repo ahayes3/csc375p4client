@@ -11,23 +11,116 @@ import scala.util.Using
 
 object Main {
   private var window:Option[Long] = Option.empty
-  val height = 5
-  val width = height*2
-  val s = 200
-  val t = 200
-  val c1 = .75
-  val c2 = 1.0
-  val c3 = 1.25
-  val maxSteps = 2000
-  val alloy = new Alloy(10,1.0/3,c1,1.0/3,c2,1.0/3,c3)
-  val jacobi = new Jacobi(alloy.arr,t,s,alloy,maxSteps)
+  var divisor = 40
+  val sizes = Seq(20,40,120)
+  //good choices for 1920/1080 resolution and width
+  // are 10, 20, 30, 40, 60, 120
+  var width = 1920/divisor
+  var height = 1080/divisor
   private val translation = 20
+  var s = 200
+  var t = 200
+  var c1 = .75
+  var c2 = 1.0
+  var c3 = 1.25
+  var looping = true
+  var maxSteps = 10000
+  val res = (1920, 1080)
 
   def loop():Unit = {
-    val a = jacobi.compute(window)
+    val alloy = new Alloy(width,height,1.0/3,c1,1.0/3,c2,1.0/3,c3)
+    val jacobi = new Jacobi(alloy.arr, t, s, alloy, maxSteps,math.floor(res._1.toFloat/width.toFloat).toInt)
+    jacobi.compute(window)
   }
 
   def main(args: Array[String]): Unit = {
+    for (i <- args.indices) {
+      args(i) match {
+        case "-s" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -s")
+          else {
+            try {
+              s = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -s is not a number")
+            }
+          }
+        case "-t" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -t")
+          else {
+            try {
+              t = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -t is not a number")
+            }
+          }
+        case "-h" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -h")
+          else {
+            try {
+              height = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -h is not a number")
+            }
+          }
+        case "-w" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -w")
+          else {
+            try {
+              width = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -w is not a number")
+            }
+          }
+        case "-c1" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -c1")
+          else {
+            try {
+              c1 = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -c1 is not a number")
+            }
+          }
+        case "-c2" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -c2")
+          else {
+            try {
+              c2 = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -c2 is not a number")
+            }
+          }
+        case "-c3" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -c3")
+          else {
+            try {
+              c3 = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -c3 is not a number")
+            }
+          }
+        case "-maxSteps" =>
+          if (args.length <= i + 1)
+            throw new IllegalArgumentException("Missing value for -maxSteps")
+          else {
+            try {
+              maxSteps = args(i + 1).toInt
+            } catch {
+              case e: NumberFormatException => throw IllegalArgumentException("Value for -maxSteps is not a number")
+            }
+          }
+        case "-loop" => looping = true
+        case _ =>
+      }
+    }
+
     run()
   }
 
@@ -53,7 +146,7 @@ object Main {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE)
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE)
 
-    window = Option(glfwCreateWindow(1920,1080,"Heatmap Propagation",NULL,NULL)) //use the java NULL
+    window = Option(glfwCreateWindow(1920,1080,"Heatmap Propagation",glfwGetPrimaryMonitor(),NULL)) //use the java NULL
     if(window.isEmpty)
       throw new RuntimeException("Failed to create the GLFW window")
 
@@ -76,13 +169,13 @@ object Main {
     })
 
     Using(stackPush()) { stack =>
-      val pWidth = stack.mallocInt(1) // int*
+      val pWidth = stack.mallocInt(1)
       val pHeight = stack.mallocInt(1)
-      // Get the window size passed to glfwCreateWindow
+
       glfwGetWindowSize(window.get, pWidth, pHeight)
-      // Get the resolution of the primary monitor
+
       val vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor)
-      // Center the window
+
       glfwSetWindowPos(window.get, (vidmode.width - pWidth.get(0)) / 2, (vidmode.height - pHeight.get(0)) / 2)
     }
 
