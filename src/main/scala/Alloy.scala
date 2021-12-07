@@ -1,3 +1,4 @@
+import java.nio.ByteBuffer
 import scala.util.Random
 
 class Alloy(val width:Int,height:Int,val c1:Double,val cm1:Double,val c2:Double,val cm2:Double, val c3:Double,val cm3:Double) {
@@ -28,5 +29,19 @@ object Alloy {
 case class Cell(val c1:Double,val cm1:Double,val c2:Double,val cm2:Double, val c3:Double,val cm3:Double,var temp:Double) {
   def tempProps(): (Double,Double,Double) = {
     (c1 * temp, c2 * temp, c3* temp)
+  }
+  def put(buff:ByteBuffer): Unit = {
+    buff.putDouble(c1)
+    buff.putDouble(cm1)
+    buff.putDouble(c2)
+    buff.putDouble(cm2)
+    buff.putDouble(c3)
+    buff.putDouble(cm3)
+    buff.putDouble(temp)
+  }
+}
+object Cell {
+  def from(buff:ByteBuffer): Cell = {
+    Cell(buff.getDouble,buff.getDouble,buff.getDouble,buff.getDouble,buff.getDouble,buff.getDouble,buff.getDouble)
   }
 }
