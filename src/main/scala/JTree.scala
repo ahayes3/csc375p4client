@@ -2,7 +2,9 @@ import org.lwjgl.glfw.GLFW.{glfwPollEvents, glfwSwapBuffers, glfwWindowShouldClo
 import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_MODELVIEW, GL_PROJECTION, GL_QUADS, glBegin, glClear, glClearColor, glColor3f, glEnd, glLoadIdentity, glMatrixMode, glOrtho, glVertex3f, glVertex3i, glViewport}
 
+import java.net.{Inet4Address, InetSocketAddress}
 import java.nio.ByteBuffer
+import java.nio.channels.SocketChannel
 import java.util.concurrent.{RecursiveAction, RecursiveTask}
 
 abstract class JTree extends RecursiveTask[Double] {
@@ -142,6 +144,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   val minSize = 30
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = math.max(heat1, heat2)
+  val servers: Seq[(String,Int)] = Seq(("localhost",8001))
 
   var out: Array[Array[Cell]] = Array.ofDim[Cell](old.length, old.head.length)
   val root: JTree = build(old, Coord(0, 0), Coord(old.length, old(0).length))
@@ -185,17 +188,38 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 
       val leaves = root.leaves()
       val buffs = leaves.map(_ => ByteBuffer.allocate(10000))
-      for(i <- leaves.indices) {
+      val recBuffs = buffs.indices.map(_ => ByteBuffer.allocate(10000))
+      val positions = for(i <- leaves.indices) yield {
         buff.clear()
+        buffs(i).putInt(i) //index
         leaves(i).put(buffs(i))
         buff.flip()
+        leaves(i).tl
       }
-      sendAll()
-      receiveAll()
+      //positions represents inclusively the top right of the area
 
+//      val sockets = for(i <- servers.indices) yield {
+//        val socket = SocketChannel.open()
+//        val s = servers(i)
+//        socket.connect(new InetSocketAddress(s._1,s._2))
+//        socket
+//      }
+      val sockets = sendAll(servers,buffs)
+      val outputs = receiveAll(positions, sockets)
+
+      outputs.foreach(p => {
+        val c = p._2
+        val m = p._1
+        for(i <- c.x until m.length) {
+          for(j <- c.y until m(i).length) {
+            out(i)(j).temp = m(i)(j)
+          }
+        }
+      })
 
       //difference = root.computeT()
       old = out.map(p => p.clone())
+
 
       //todo: don't need to change past here
       root.setArr(old)
@@ -221,6 +245,42 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
       println(s"Difference: $difference    Steps: $steps")
     }
     out
+  }
+
+  private def sendAll(servers:Seq[(String,Int)], buffs:Seq[ByteBuffer]): Seq[SocketChannel] = {
+    for(i <- buffs.indices) yield {
+      val server = servers(i%servers.length)
+      val channel = SocketChannel.open(new InetSocketAddress(server._1,server._2))
+      channel.write(buffs(i))
+      channel
+    }
+  }
+
+  private def receiveAll(positions:Seq[Coord], sockets:Seq[SocketChannel]): Seq[(Array[Array[Double]],Coord)] = {
+    val buff = ByteBuffer.allocate(10000)
+    for(i <- sockets) yield {
+      while({
+        val read = i.read(buff)
+        read > 0
+      }){}
+      //var read = i.read(buff)
+
+      buff.flip()
+      //might need fix if whole buffer isn't read in 1 chunk
+      val idx = buff.getInt()
+      val width = buff.getInt()
+      val height = buff.getInt()
+      val matrix = (for(i <- 0 until width) yield {
+        (for(j <- 0 until height) yield {
+          buff.getDouble()
+        }).toArray
+      }).toArray
+      (matrix,positions(idx))
+    }
+  }
+
+  private def resend(): Unit = {
+
   }
 
   private def rect(x: Int, y: Int, width: Int, height: Int): Unit = {
