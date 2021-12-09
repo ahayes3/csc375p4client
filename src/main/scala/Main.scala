@@ -146,7 +146,8 @@ object Main {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE)
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE)
 
-    window = Option(glfwCreateWindow(1920,1080,"Heatmap Propagation",glfwGetPrimaryMonitor(),NULL)) //use the java NULL
+    window = Option(glfwCreateWindow(1920,1080,"Heatmap Propagation",NULL,NULL))
+//    window = Option(glfwCreateWindow(1920,1080,"Heatmap Propagation",glfwGetPrimaryMonitor(),NULL)) //use the java NULL
     if(window.isEmpty)
       throw new RuntimeException("Failed to create the GLFW window")
 

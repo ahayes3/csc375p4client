@@ -2,8 +2,8 @@ import org.lwjgl.glfw.GLFW.{glfwPollEvents, glfwSwapBuffers, glfwWindowShouldClo
 import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11.{GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_MODELVIEW, GL_PROJECTION, GL_QUADS, glBegin, glClear, glClearColor, glColor3f, glEnd, glLoadIdentity, glMatrixMode, glOrtho, glVertex3f, glVertex3i, glViewport}
 
-import java.net.{Inet4Address, InetSocketAddress}
-import java.nio.ByteBuffer
+import java.net.{Inet4Address, InetSocketAddress, SocketException}
+import java.nio.{BufferOverflowException, ByteBuffer}
 import java.nio.channels.SocketChannel
 import java.util.concurrent.{RecursiveAction, RecursiveTask}
 
@@ -92,7 +92,7 @@ class Leaf(var arr: Array[Array[Cell]], var out: Array[Array[Cell]], val tl: Coo
     neighbors
   }
 
-  def put(buff: ByteBuffer): Unit = {
+  def put(buff: ByteBuffer,index:Int): Unit = {
     //put a boolean in for if there is padding on top right bottom and left
     var padBits = 0
     var top =false
@@ -122,29 +122,35 @@ class Leaf(var arr: Array[Array[Cell]], var out: Array[Array[Cell]], val tl: Coo
     val stx = if(left) tl.x - 1 else tl.x
     val ex = if(right) br.x + 1 else br.x
     val sty = if(top) tl.y -1 else tl.y
-    val ey = if(bottom) br.x + 1 else br.x
+    val ey = if(bottom) br.y + 1 else br.y
 
+    buff.putInt(index)
     buff.putInt(padBits) //padding
     buff.putInt(width)
     buff.putInt(height)
 
     for(i <- stx until ex) {
       for(j <-sty until ey) {
-        arr(i)(j).put(buff)
+        try {
+          arr(i)(j).put(buff)
+        }catch {
+          case e:BufferOverflowException => e.printStackTrace()
+        }
       }
     }
   }
 
 }
+case class Server(path:String, port:Int)
 
 class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: Alloy, val maxSteps: Int, val cellSize: Int) {
   var heat1 = t
   var heat2 = s
   val maxDiff = 50
-  val minSize = 30
+  val minSize = 20
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = math.max(heat1, heat2)
-  val servers: Seq[(String,Int)] = Seq(("localhost",8001))
+  var servers: Seq[Server] = Seq(Server("localhost",8001))
 
   var out: Array[Array[Cell]] = Array.ofDim[Cell](old.length, old.head.length)
   val root: JTree = build(old, Coord(0, 0), Coord(old.length, old(0).length))
@@ -167,6 +173,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   }
 
   def compute(window: Option[Long]): Array[Array[Cell]] = {
+    out = old.map(p => p.clone())
     GL.createCapabilities()
     glClearColor(1, 1, 1, 0)
     glViewport(0, 0, 1920, 1080)
@@ -190,10 +197,9 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
       val buffs = leaves.map(_ => ByteBuffer.allocate(10000))
       val recBuffs = buffs.indices.map(_ => ByteBuffer.allocate(10000))
       val positions = for(i <- leaves.indices) yield {
-        buff.clear()
-        buffs(i).putInt(i) //index
-        leaves(i).put(buffs(i))
-        buff.flip()
+        buffs(i).clear()
+        leaves(i).put(buffs(i),i)
+        buffs(i).flip()
         leaves(i).tl
       }
       //positions represents inclusively the top right of the area
@@ -204,20 +210,37 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 //        socket.connect(new InetSocketAddress(s._1,s._2))
 //        socket
 //      }
-      val sockets = sendAll(servers,buffs)
+      val sockets = sendAll(buffs)
       val outputs = receiveAll(positions, sockets)
 
-      outputs.foreach(p => {
-        val c = p._2
-        val m = p._1
-        for(i <- c.x until m.length) {
-          for(j <- c.y until m(i).length) {
-            out(i)(j).temp = m(i)(j)
+      for(o <- outputs) {
+        val c =o._2
+        val m = o._1
+        for(i <- m.indices) {
+          for (j <- m(i).indices) {
+            old(c.x + i)(c.y+j).temp = m(i)(j)
           }
         }
-      })
+      }
+//      outputs.foreach(p => {
+//        val c = p._2
+//        val m = p._1
+//        for(i <- c.x until c.x+m.length) {
+//          for(j <- c.y until c.y+m(i).length) {
+//            println(c)
+//            old(i)(j).temp = m(i)(j)
+//          }
+//        }
+//      })
 
+      for(i <- out.indices) {
+        for(j <- out(i).indices) {
+          difference += out(i)(j).temp - old(i)(j).temp
+        }
+      }
       //difference = root.computeT()
+
+      //no longer needed, out unused, probably can delete it
       old = out.map(p => p.clone())
 
 
@@ -232,6 +255,8 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 
       for (i <- old.indices) {
         for (j <- old(i).indices) {
+          if(old(i)(j)==null)
+            println("NULL")
           color = interpolateHeatColor(old(i)(j).temp)
           glColor3f(color._1, color._2, color._3)
           rect(i * cellSize, j * cellSize, cellSize, cellSize)
@@ -247,11 +272,13 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
     out
   }
 
-  private def sendAll(servers:Seq[(String,Int)], buffs:Seq[ByteBuffer]): Seq[SocketChannel] = {
+  private def sendAll(buffs:Seq[ByteBuffer]): Seq[SocketChannel] = {
     for(i <- buffs.indices) yield {
       val server = servers(i%servers.length)
-      val channel = SocketChannel.open(new InetSocketAddress(server._1,server._2))
-      channel.write(buffs(i))
+      val channel = SocketChannel.open(new InetSocketAddress(server.path,server.port))
+      val written = channel.write(buffs(i))
+      if(buffs(i).remaining() > 0)
+        throw new Exception()
       channel
     }
   }
@@ -259,15 +286,34 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   private def receiveAll(positions:Seq[Coord], sockets:Seq[SocketChannel]): Seq[(Array[Array[Double]],Coord)] = {
     val buff = ByteBuffer.allocate(10000)
     for(i <- sockets) yield {
+      buff.clear()
+      i.configureBlocking(false)
+//      while({
+//        val read = i.read(buff)
+//        read > 0
+//      }){}
+      var totalBytes = 0
+      //println(s"Index: ${sockets.indexOf(i)}")
       while({
-        val read = i.read(buff)
-        read > 0
+        val bytesRead = i.read(buff)
+        if(bytesRead == -1)
+          throw new SocketException()
+        totalBytes += bytesRead
+//        println(s"Bytes Read: $bytesRead    Total Bytes: $totalBytes")
+//        println(s"Loop: ${bytesRead != 0 && totalBytes != 0}")
+        (bytesRead != 0 || totalBytes == 0)
       }){}
-      //var read = i.read(buff)
+      //println(s"TOTAL bytes: $totalBytes")
+      val tmp = ByteBuffer.allocate(4)
+      tmp.putInt(-2)
+      tmp.flip()
+      i.write(tmp) //lets server know it can close connection
 
       buff.flip()
-      //might need fix if whole buffer isn't read in 1 chunk
+      if(!buff.hasRemaining)
+        println("HERE")
       val idx = buff.getInt()
+      //println(s"Index: $idx")
       val width = buff.getInt()
       val height = buff.getInt()
       val matrix = (for(i <- 0 until width) yield {
