@@ -153,7 +153,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   val minSize = 20
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = math.max(heat1, heat2)
-  var servers: Seq[Server] = Seq(Server("pi.cs.oswego.edu",8001))
+  var servers: Seq[Server] = Seq(Server("localhost",8001))
 
   var out: Array[Array[Cell]] = Array.ofDim[Cell](old.length, old.head.length)
   val root: JTree = build(old, Coord(0, 0), Coord(old.length, old(0).length))
@@ -215,7 +215,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 //        socket.connect(new InetSocketAddress(s._1,s._2))
 //        socket
 //      }
-      val sockets = sendAll(buffs,sizes)
+      val sockets = sendAll(sizes,buffs)
       val outputs = receiveAll(positions, sockets)
 
       for(o <- outputs) {
@@ -282,7 +282,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
       val server = servers(i%servers.length)
       val channel = SocketChannel.open(new InetSocketAddress(server.path,server.port))
 
-      println(channel.isConnectionPending)
+      //println(channel.isConnectionPending)
 
       channel.write(sizes(i))
 
