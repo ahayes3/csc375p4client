@@ -92,7 +92,7 @@ class Leaf(var arr: Array[Array[Cell]], var out: Array[Array[Cell]], val tl: Coo
     neighbors
   }
 
-  def put(buff: ByteBuffer,index:Int): Unit = {
+  def put(buff: ByteBuffer,size:ByteBuffer,index:Int): Unit = {
     //put a boolean in for if there is padding on top right bottom and left
     var padBits = 0
     var top =false
@@ -129,6 +129,9 @@ class Leaf(var arr: Array[Array[Cell]], var out: Array[Array[Cell]], val tl: Coo
     buff.putInt(width)
     buff.putInt(height)
 
+    size.putInt(width)
+    size.putInt(height)
+
     for(i <- stx until ex) {
       for(j <-sty until ey) {
         try {
@@ -150,7 +153,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   val minSize = 20
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = math.max(heat1, heat2)
-  var servers: Seq[Server] = Seq(Server("localhost",8001))
+  var servers: Seq[Server] = Seq(Server("pi.cs.oswego.edu",8001))
 
   var out: Array[Array[Cell]] = Array.ofDim[Cell](old.length, old.head.length)
   val root: JTree = build(old, Coord(0, 0), Coord(old.length, old(0).length))
@@ -195,10 +198,12 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 
       val leaves = root.leaves()
       val buffs = leaves.map(_ => ByteBuffer.allocate(10000))
+      val sizes = leaves.map(_ => ByteBuffer.allocate(8))
       val recBuffs = buffs.indices.map(_ => ByteBuffer.allocate(10000))
       val positions = for(i <- leaves.indices) yield {
         buffs(i).clear()
-        leaves(i).put(buffs(i),i)
+        leaves(i).put(buffs(i),sizes(i),i)
+        sizes(i).flip()
         buffs(i).flip()
         leaves(i).tl
       }
@@ -210,7 +215,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 //        socket.connect(new InetSocketAddress(s._1,s._2))
 //        socket
 //      }
-      val sockets = sendAll(buffs)
+      val sockets = sendAll(buffs,sizes)
       val outputs = receiveAll(positions, sockets)
 
       for(o <- outputs) {
@@ -272,10 +277,15 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
     out
   }
 
-  private def sendAll(buffs:Seq[ByteBuffer]): Seq[SocketChannel] = {
+  private def sendAll(sizes:Seq[ByteBuffer], buffs:Seq[ByteBuffer]): Seq[SocketChannel] = {
     for(i <- buffs.indices) yield {
       val server = servers(i%servers.length)
       val channel = SocketChannel.open(new InetSocketAddress(server.path,server.port))
+
+      println(channel.isConnectionPending)
+
+      channel.write(sizes(i))
+
       val written = channel.write(buffs(i))
       if(buffs(i).remaining() > 0)
         throw new Exception()
