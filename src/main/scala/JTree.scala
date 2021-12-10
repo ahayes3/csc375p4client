@@ -153,7 +153,8 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   val minSize = 20
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = math.max(heat1, heat2)
-  var servers: Seq[Server] = Seq(Server("localhost",8001))
+  var servers: Seq[Server] = Seq(Server("pi.cs.oswego.edu",8001), Server("rho.cs.oswego.edu",8001))
+  //var servers: Seq[Server] = Seq(Server("localhost",8001))
 
   var out: Array[Array[Cell]] = Array.ofDim[Cell](old.length, old.head.length)
   val root: JTree = build(old, Coord(0, 0), Coord(old.length, old(0).length))
@@ -223,7 +224,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
         val m = o._1
         for(i <- m.indices) {
           for (j <- m(i).indices) {
-            old(c.x + i)(c.y+j).temp = m(i)(j)
+            out(c.x + i)(c.y+j).temp = m(i)(j)
           }
         }
       }
@@ -237,7 +238,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
 //          }
 //        }
 //      })
-
+      difference = 0
       for(i <- out.indices) {
         for(j <- out(i).indices) {
           difference += out(i)(j).temp - old(i)(j).temp
@@ -281,6 +282,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
     for(i <- buffs.indices) yield {
       val server = servers(i%servers.length)
       val channel = SocketChannel.open(new InetSocketAddress(server.path,server.port))
+      channel.finishConnect()
 
       //println(channel.isConnectionPending)
 
@@ -317,6 +319,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
       val tmp = ByteBuffer.allocate(4)
       tmp.putInt(-2)
       tmp.flip()
+      i.configureBlocking(true)
       i.write(tmp) //lets server know it can close connection
 
       buff.flip()
@@ -326,6 +329,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
       //println(s"Index: $idx")
       val width = buff.getInt()
       val height = buff.getInt()
+      i.close()
       val matrix = (for(i <- 0 until width) yield {
         (for(j <- 0 until height) yield {
           buff.getDouble()
