@@ -269,12 +269,11 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
         }
       }
       glEnd()
-      if(steps==1)
-        difference=100
+      difference=100
 
       glfwSwapBuffers(window.get)
       glfwPollEvents()
-      println(s"Difference: $difference    Steps: $steps")
+      println(s"Steps: $steps")
     }
     out
   }
