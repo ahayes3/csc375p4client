@@ -153,7 +153,7 @@ class Jacobi(var old: Array[Array[Cell]], val t: Double, val s: Double, alloy: A
   val minSize = 20
   val roomTemp = Alloy.roomTemp
   private val graphicMaxHeat = math.max(heat1, heat2)
-  var servers: Seq[Server] = Seq(Server("pi.cs.oswego.edu",8001), Server("rho.cs.oswego.edu",8001))
+  var servers: Seq[Server] = Seq(Server("wolf.cs.oswego.edu",8001), Server("rho.cs.oswego.edu",8001),Server("altair.cs.oswego.edu",8001))
   //var servers: Seq[Server] = Seq(Server("localhost",8001))
 
   var out: Array[Array[Cell]] = Array.ofDim[Cell](old.length, old.head.length)
